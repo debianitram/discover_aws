@@ -1,5 +1,5 @@
 import boto3
-
+from pprint import pprint
 
 # Config ~/.aws/config
 # [default]
@@ -41,7 +41,6 @@ class DiscoverEC2(object):
         for tag in data.get('Tags'):
             if tag['Key'] == 'Name':
                 return tag['Value']
-        
         return 'Undefined'
 
     def get_operating_system(self, instance):
@@ -60,4 +59,7 @@ if __name__ == '__main__':
     ec2 = DiscoverEC2(region)
     ec2.extract_data()
 
-    print(ec2.list_inventory)
+    for vm in ec2.list_inventory:
+        pprint(vm, indent=3)
+        print('\n')
+
