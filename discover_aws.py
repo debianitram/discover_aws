@@ -1,3 +1,5 @@
+from pprint import pprint
+
 import boto3
 from botocore.exceptions import ClientError
 
@@ -16,8 +18,19 @@ class DiscoverEC2(object):
 
     def __init__(self, region):
         self.region = region
-        self.list_inventory = list()
         self.ec2 = boto3.resource('ec2', self.region)
+        self.account_id = self.get_account_id()
+        self.inventory = self.prepare_inventory()
+
+    def prepare_inventory(self):
+        inventory = {
+            'region': self.region,
+            'account_id': self.get_account_id(),
+            'provider': 'AWS',
+            'system_type': 'Virtual Machine - AWS',
+            'instances': list()
+        }
+        return inventory
 
 
     def extract_data(self):
@@ -27,17 +40,15 @@ class DiscoverEC2(object):
             meta_data = instance.meta.data
             data = {
                 'server_name': self.get_server_name(meta_data),
-                'system_type': 'Virtual Machine - AWS',
                 'tags': meta_data.get('Tags'),
-                'provider': 'AWS',
                 'instance_type': meta_data.get('InstanceType'),
-                'region': self.region,
-                'operating_system': self.get_operating_system(instance),
+                'platform': self.get_platform(instance),
                 'count_cpu': meta_data['CpuOptions']['CoreCount'],
-                'total_storage': self.get_total_storage(instance)
+                'total_storage': self.get_total_storage(instance),
+
             }
 
-            self.list_inventory.append(data)
+            self.inventory['instances'].append(data)
 
 
     def get_server_name(self, data):
@@ -46,7 +57,7 @@ class DiscoverEC2(object):
                 return tag['Value']
         return 'Undefined'
 
-    def get_operating_system(self, instance):
+    def get_platform(self, instance):
         # The value is Windows for Windows AMIs; otherwise blank.
         platform = getattr(instance.image, 'platform', 'Linux')
         if not platform:
@@ -58,11 +69,11 @@ class DiscoverEC2(object):
         # Expresado en Gb.
         return sum([volume.size for volume in instance.volumes.all()])
 
-    def get_owner_id(self):
+    def get_account_id(self):
         # https://boto3.readthedocs.io/en/latest/reference/services/sts.html?highlight=sts
         sts = boto3.client('sts')
         identity = sts.get_caller_identity()
-        return indentity['Account']
+        return identity['Account']
 
     # Pricing
     def get_pricing(self):
@@ -82,7 +93,13 @@ if __name__ == '__main__':
     ec2 = DiscoverEC2(region)
     ec2.extract_data()
 
-    for vm in ec2.list_inventory:
+    print('Account ID: {}'.format(ec2.inventory['account_id']))
+    print('Provider: {}'.format(ec2.inventory['provider']))
+    print('System Type: {}'.format(ec2.inventory['system_type']))
+    print('Region: {}'.format(ec2.inventory['region']))
+
+    print('Instances')
+    for vm in ec2.inventory['instances']:
         pprint(vm, indent=3)
         print('\n')
 
